@@ -3,7 +3,7 @@ use envfind::discovery::conda::CondaProvider;
 use envfind::discovery::path::PathProvider;
 use envfind::discovery::uv::UvProvider;
 use envfind::discovery::{DiscoveryProvider, default_providers, discover_all};
-use envfind::model::{Candidate, Manager};
+use envfind::model::{Candidate, Manager, ProbeMode};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -80,6 +80,7 @@ fn relative_candidates_are_not_resolved_from_current_directory() {
         manager: Manager::System,
         env_path: PathBuf::from("relative-env"),
         python_path: PathBuf::from("relative-env/python.exe"),
+        probe_mode: ProbeMode::Interpreter,
     }]))]);
     assert!(found.is_empty());
 }

@@ -11,6 +11,12 @@ pub enum Manager {
     System,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProbeMode {
+    Interpreter,
+    StaticMetadata,
+}
+
 impl Manager {
     pub fn label(self) -> &'static str {
         match self {
@@ -41,6 +47,7 @@ pub struct Candidate {
     pub manager: Manager,
     pub env_path: PathBuf,
     pub python_path: PathBuf,
+    pub probe_mode: ProbeMode,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

@@ -1,4 +1,6 @@
-use super::{DiscoveryProvider, conda_candidate, env_path, immediate_children};
+use super::{
+    DiscoveryProvider, conda_candidate, env_path, immediate_children, trusted_absolute_path,
+};
 use crate::model::Manager;
 use std::env;
 use std::fs;
@@ -19,7 +21,9 @@ impl DiscoveryProvider for CondaProvider {
         }
         if let Some(home) = env_path() {
             let file = home.join(".conda/environments.txt");
-            if let Ok(text) = fs::read_to_string(file) {
+            if trusted_absolute_path(&file).is_some()
+                && let Ok(text) = fs::read_to_string(file)
+            {
                 direct_prefixes.extend(text.lines().filter_map(|l| {
                     let p = PathBuf::from(l.trim());
                     (!l.trim().is_empty() && !l.trim_start().starts_with('#')).then_some(p)
@@ -36,7 +40,9 @@ impl DiscoveryProvider for CondaProvider {
                 base_roots.push(home.join(name));
             }
             for config in [home.join(".condarc"), home.join(".config/conda/.condarc")] {
-                if let Ok(text) = fs::read_to_string(config) {
+                if trusted_absolute_path(&config).is_some()
+                    && let Ok(text) = fs::read_to_string(config)
+                {
                     for root in parse_envs_dirs(&text) {
                         direct_prefixes.extend(prefixes_from_envs_dir(&root));
                     }

@@ -72,7 +72,7 @@ pub fn render_table(matches: &[(Candidate, ProbeResult)]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Manager, ProbeResult};
+    use crate::model::{Manager, ProbeMode, ProbeResult};
     use std::path::PathBuf;
     #[test]
     fn table_has_required_columns_and_full_paths() {
@@ -80,6 +80,7 @@ mod tests {
             manager: Manager::System,
             env_path: PathBuf::from(r"C:\env"),
             python_path: PathBuf::from(r"C:\env\python.exe"),
+            probe_mode: ProbeMode::Interpreter,
         };
         let r = ProbeResult {
             import_match: true,

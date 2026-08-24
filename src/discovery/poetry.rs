@@ -1,4 +1,4 @@
-use super::{DiscoveryProvider, immediate_children, venv_candidate};
+use super::{DiscoveryProvider, immediate_children, trusted_absolute_path, venv_candidate};
 use crate::model::Manager;
 use std::env;
 use std::fs;
@@ -32,6 +32,7 @@ impl DiscoveryProvider for PoetryProvider {
     }
 }
 fn configured_path(path: &Path) -> Option<PathBuf> {
+    trusted_absolute_path(path)?;
     parse_configured_path(&fs::read_to_string(path).ok()?)
 }
 

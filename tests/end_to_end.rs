@@ -1,4 +1,4 @@
-use envfind::model::{Candidate, Manager, ProbeResult};
+use envfind::model::{Candidate, Manager, ProbeMode, ProbeResult};
 use std::path::PathBuf;
 use std::sync::{
     Arc,
@@ -18,6 +18,7 @@ fn worker_pool_is_bounded() {
             manager: Manager::System,
             env_path: PathBuf::from(format!("env{i}")),
             python_path: PathBuf::from(format!("python{i}")),
+            probe_mode: ProbeMode::Interpreter,
         })
         .collect();
     let a = Arc::clone(&active);
@@ -47,9 +48,24 @@ fn completed_no_match_is_not_a_result() {
         manager: Manager::System,
         env_path: PathBuf::from("env"),
         python_path: PathBuf::from("python"),
+        probe_mode: ProbeMode::Interpreter,
     };
     let found = app::probe_candidates_with(vec![candidate], "missing", |_, _| {
         Some(ProbeResult::default())
+    });
+    assert!(found.is_empty());
+}
+
+#[test]
+fn static_project_candidate_is_never_sent_to_interpreter_probe() {
+    let candidate = Candidate {
+        manager: Manager::Uv,
+        env_path: PathBuf::from(r"C:\project\.venv"),
+        python_path: PathBuf::from(r"C:\project\.venv\Scripts\python.exe"),
+        probe_mode: ProbeMode::StaticMetadata,
+    };
+    let found = app::probe_candidates_with(vec![candidate], "scipy", |_, _| {
+        panic!("inactive project interpreter must not execute")
     });
     assert!(found.is_empty());
 }

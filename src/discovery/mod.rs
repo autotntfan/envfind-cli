@@ -2,10 +2,12 @@ use std::collections::HashMap;
 use std::env;
 use std::fs;
 #[cfg(windows)]
+use std::os::windows::fs::MetadataExt;
+#[cfg(windows)]
 use std::path::Prefix;
 use std::path::{Component, Path, PathBuf};
 
-use crate::model::{Candidate, Manager};
+use crate::model::{Candidate, Manager, ProbeMode};
 
 pub mod active;
 pub mod conda;
@@ -15,6 +17,8 @@ pub mod poetry;
 pub mod pyenv;
 pub mod uv;
 pub mod windows_registry;
+
+const MAX_DISCOVERY_ENTRIES: usize = 4096;
 
 pub trait DiscoveryProvider: Send + Sync {
     fn discover(&self) -> Vec<Candidate>;
@@ -86,14 +90,34 @@ pub(crate) fn trusted_absolute_path(path: &Path) -> Option<&Path> {
         return None;
     }
     #[cfg(windows)]
-    if matches!(
-        path.components().next(),
-        Some(Component::Prefix(prefix))
-            if matches!(prefix.kind(), Prefix::UNC(..) | Prefix::VerbatimUNC(..))
-    ) {
+    if let Some(Component::Prefix(prefix)) = path.components().next()
+        && !matches!(prefix.kind(), Prefix::Disk(..))
+    {
+        return None;
+    }
+    if has_reparse_ancestor(path) {
         return None;
     }
     Some(path)
+}
+
+fn has_reparse_ancestor(path: &Path) -> bool {
+    let mut current = path;
+    loop {
+        match fs::symlink_metadata(current) {
+            Ok(metadata) if is_reparse_point(&metadata) => return true,
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return true,
+        }
+        let Some(parent) = current.parent() else {
+            return false;
+        };
+        if parent == current {
+            return false;
+        }
+        current = parent;
+    }
 }
 
 pub(crate) fn path_key(path: &Path) -> String {
@@ -103,8 +127,22 @@ pub(crate) fn path_key(path: &Path) -> String {
 }
 pub(crate) fn is_regular_file(path: &Path) -> bool {
     fs::symlink_metadata(path)
-        .map(|m| m.is_file() && !m.file_type().is_symlink())
+        .map(|m| m.is_file() && !is_reparse_point(&m))
         .unwrap_or(false)
+}
+pub(crate) fn is_regular_directory(path: &Path) -> bool {
+    fs::symlink_metadata(path)
+        .map(|m| m.is_dir() && !is_reparse_point(&m))
+        .unwrap_or(false)
+}
+#[cfg(windows)]
+fn is_reparse_point(metadata: &fs::Metadata) -> bool {
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+#[cfg(not(windows))]
+fn is_reparse_point(metadata: &fs::Metadata) -> bool {
+    metadata.file_type().is_symlink()
 }
 pub(crate) fn python_file(path: &Path) -> bool {
     if !is_regular_file(path) {
@@ -135,25 +173,26 @@ pub(crate) fn candidate(
         manager,
         env_path,
         python_path,
+        probe_mode: ProbeMode::Interpreter,
     })
 }
 pub(crate) fn immediate_children(root: &Path) -> Vec<PathBuf> {
+    if trusted_absolute_path(root).is_none() {
+        return Vec::new();
+    }
     fs::read_dir(root)
         .into_iter()
         .flatten()
         .filter_map(Result::ok)
-        .filter_map(|e| {
-            e.file_type()
-                .ok()
-                .filter(|t| t.is_dir() && !t.is_symlink())
-                .map(|_| e.path())
-        })
+        .take(MAX_DISCOVERY_ENTRIES)
+        .filter_map(|e| is_regular_directory(&e.path()).then_some(e.path()))
         .collect()
 }
 pub(crate) fn env_path() -> Option<PathBuf> {
     env::var_os("USERPROFILE")
         .or_else(|| env::var_os("HOME"))
         .map(PathBuf::from)
+        .filter(|path| trusted_absolute_path(path).is_some())
 }
 pub(crate) fn venv_python(root: &Path) -> PathBuf {
     #[cfg(windows)]
@@ -171,10 +210,8 @@ pub(crate) fn venv_python(root: &Path) -> PathBuf {
     }
 }
 pub(crate) fn conda_candidate(root: PathBuf, manager: Manager) -> Option<Candidate> {
-    if !fs::symlink_metadata(root.join("conda-meta"))
-        .map(|m| m.is_dir() && !m.file_type().is_symlink())
-        .unwrap_or(false)
-    {
+    trusted_absolute_path(&root)?;
+    if !is_regular_directory(&root.join("conda-meta")) {
         return None;
     }
     candidate(
@@ -188,9 +225,12 @@ pub(crate) fn conda_candidate(root: PathBuf, manager: Manager) -> Option<Candida
     )
 }
 pub(crate) fn venv_candidate(root: PathBuf, manager: Manager) -> Option<Candidate> {
-    is_regular_file(&root.join("pyvenv.cfg"))
-        .then(|| candidate(manager, root.clone(), venv_python(&root)))
-        .flatten()
+    trusted_absolute_path(&root)?;
+    if is_regular_directory(&root) && is_regular_file(&root.join("pyvenv.cfg")) {
+        candidate(manager, root.clone(), venv_python(&root))
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]

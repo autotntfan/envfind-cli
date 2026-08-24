@@ -18,9 +18,9 @@ conda    C:\\Users\\me\\miniconda3\\envs\\ml C:\\Users\\me\\miniconda3\\envs\\ml
 
 ## Discovery boundary
 
-envfind does not scan entire drives or recursively search for files named `python.exe`. It discovers only active environments, registered/PATH Python installations, Conda-family roots, uv-managed Python roots, pyenv-win versions, Poetry centralized virtualenvs, and Pipenv centralized virtualenvs. Provider directories are enumerated shallowly.
+envfind does not scan entire drives or recursively search for files named `python.exe`. It discovers active environments, registered/PATH Python installations, Conda-family roots, uv-managed Python roots, pyenv-win versions, Poetry centralized virtualenvs, Pipenv centralized virtualenvs, and the current project's uv-style `.venv` through a bounded parent lookup. Provider directories are enumerated shallowly.
 
-Unrelated project-local `.venv` directories are not globally searched. They are included only when active through `VIRTUAL_ENV` or when located under a supported centralized manager root. Broken or timed-out interpreters are skipped.
+Unrelated project-local `.venv` directories are not globally searched. A `.venv` is included when active through `VIRTUAL_ENV`, explicitly selected by `UV_PROJECT_ENVIRONMENT`, or located directly under the current project/parent path (at most 16 parents) with `pyproject.toml`, `uv.toml`, or `.python-version`. Descendant and sibling projects are not searched. Active/explicit environments use isolated interpreter probing. Inactive marked project environments use direct `site-packages` metadata lookup and never execute their `python.exe`. Broken or timed-out interpreters are skipped.
 
 For each approved candidate, envfind runs its interpreter directly with Python isolated mode (`-I`) and a local standard-library probe. No shell, package manager, telemetry, or network is used during lookup.
 

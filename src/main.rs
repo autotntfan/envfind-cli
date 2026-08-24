@@ -7,14 +7,22 @@ use std::thread;
 
 use envfind::cli::{CommandLine, parse_command};
 use envfind::discovery::{default_providers, discover_all};
-use envfind::model::{Candidate, ProbeResult};
+use envfind::model::{Candidate, ProbeMode, ProbeResult};
 use envfind::output::render_table;
 use envfind::probe::{PROBE_TIMEOUT, probe};
+use envfind::static_probe;
 
 pub fn probe_candidates(candidates: Vec<Candidate>, query: &str) -> Vec<(Candidate, ProbeResult)> {
-    probe_candidates_with(candidates, query, |python, query| {
+    let mut matches = candidates
+        .iter()
+        .filter_map(|candidate| {
+            static_probe::probe(candidate, query).map(|result| (candidate.clone(), result))
+        })
+        .collect::<Vec<_>>();
+    matches.extend(probe_candidates_with(candidates, query, |python, query| {
         probe(python, query, PROBE_TIMEOUT)
-    })
+    }));
+    matches
 }
 
 pub fn probe_candidates_with<F>(
@@ -32,7 +40,12 @@ where
         .map(|n| n.get())
         .unwrap_or(1);
     let workers = cpus.clamp(1, 8).min(candidates.len());
-    let queue = Arc::new(Mutex::new(VecDeque::from(candidates)));
+    let queue = Arc::new(Mutex::new(VecDeque::from(
+        candidates
+            .into_iter()
+            .filter(|candidate| candidate.probe_mode == ProbeMode::Interpreter)
+            .collect::<Vec<_>>(),
+    )));
     let results = Arc::new(Mutex::new(Vec::new()));
     let probe_fn = Arc::new(probe_fn);
     let mut handles = Vec::new();
