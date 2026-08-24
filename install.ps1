@@ -1,12 +1,16 @@
 $ErrorActionPreference = "Stop"
 
 $repository = "autotntfan/envfind-cli"
-$version = "v0.1.0"
-if ($version -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$') {
+$version = "latest"
+if ($version -ne "latest" -and $version -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$') {
     throw "Installer version must be a release tag such as v0.1.0"
 }
 
-$releaseBaseUri = "https://github.com/$repository/releases/download/$version"
+$releaseBaseUri = if ($version -eq "latest") {
+    "https://github.com/$repository/releases/latest/download"
+} else {
+    "https://github.com/$repository/releases/download/$version"
+}
 $assetUri = "$releaseBaseUri/envfind-x86_64-pc-windows-msvc.exe"
 $checksumUri = "$releaseBaseUri/SHA256SUMS"
 
