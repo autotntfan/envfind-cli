@@ -1,6 +1,6 @@
 [package]
 name = "envfind"
-version = "0.1.2"
+version = "v0.1.0"
 edition = "2024"
 
 [lib]
